@@ -43,6 +43,8 @@
   .scap{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:6px;}
   .chip{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:7px 13px;border-radius:999px;font-weight:600;font-size:14px;}
   .cdot{width:9px;height:9px;border-radius:50%;}
+  .prev{margin-top:12px;font-size:12.5px;color:var(--muted);font-family:'Poppins';}
+  .prev b{font-weight:700;}
   .meter{position:relative;height:30px;}
   .track{display:flex;height:14px;border-radius:7px;overflow:hidden;}
   .zone{height:100%;}
@@ -114,6 +116,7 @@
       <div class="score disp" id="scoreNum">—</div>
       <div class="scap">Puntuación ponderada</div>
       <div class="chip" id="bonoChip"><span class="cdot"></span><span id="bonoText"></span></div>
+      <div class="prev" id="prevBox"></div>
     </div>
     <div>
       <div class="meter">
@@ -169,10 +172,12 @@ const TAB = "Registro";
 const HEADER = ["mes","fecha","nombre","tamano","totalTareas","noShows","pedido96","asig48","reemplazos","id"];
 const WEIGHTS = { m1:0.3, m2:0.4, m3:0.3 };
 const LS_ROWS = "tasky_cmp_rows";
+const LS_MONTHS = "tasky_cmp_months";
 const SHEET_ID = "1V1CXCeDbYWWZCIAi7WF8x6Imei6TPXGacbCP_6UP504";  // planilla fija "Tasky - Cumplimiento de Taskers"
 
 let tokenClient = null, accessToken = null, connected = false;
 let rows = JSON.parse(localStorage.getItem(LS_ROWS) || "[]");
+let monthsList = JSON.parse(localStorage.getItem(LS_MONTHS) || "[]");
 let sheetId = SHEET_ID;
 let month = null;
 
@@ -181,6 +186,7 @@ const reqRepl = (s) => (s <= 3 ? 1 : s <= 10 ? 2 : 3);
 const fmtPct = (v) => (v == null ? "—" : (v*100).toFixed(1) + "%");
 const curMonth = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
 const monthLabel = (k) => { const n=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"]; const [y,m]=k.split("-"); return n[parseInt(m,10)-1]+" "+y; };
+const prevMonthKey = (k) => { let [y,m]=k.split("-").map(Number); m--; if(m<1){m=12;y--;} return y+"-"+String(m).padStart(2,"0"); };
 const escapeHtml = (s) => (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 function setStatus(state, text) {
@@ -189,7 +195,7 @@ function setStatus(state, text) {
   $("statusText").textContent = text;
   $("connectBtn").style.display = (state === "" && text === "Guardado local") ? "inline-block" : "none";
 }
-function saveLocal(){ localStorage.setItem(LS_ROWS, JSON.stringify(rows)); }
+function saveLocal(){ localStorage.setItem(LS_ROWS, JSON.stringify(rows)); localStorage.setItem(LS_MONTHS, JSON.stringify(monthsList)); }
 
 /* ============ Google auth (auto, en segundo plano) ============ */
 function gisReady(cb){ if (window.google && google.accounts && google.accounts.oauth2) cb(); else setTimeout(()=>gisReady(cb), 200); }
@@ -286,9 +292,8 @@ function tierOf(s){
 
 /* ============ Render ============ */
 function render() {
-  const months=[...new Set(rows.map(r=>r.mes))];
   if(!month) month=curMonth();
-  if(!months.includes(month)) months.push(month);
+  const months=[...new Set([...monthsList, ...rows.map(r=>r.mes), month])].filter(Boolean);
   months.sort().reverse();
   $("monthSelect").innerHTML=months.map(k=>`<option value="${k}" ${k===month?"selected":""}>${monthLabel(k)}</option>`).join("");
 
@@ -299,6 +304,11 @@ function render() {
   $("bonoText").textContent=t.name+" · Bono "+t.bono;
   const nd=$("needle");
   if(c.score==null){ nd.style.display="none"; } else { nd.style.display="block"; nd.style.left=(c.score*100)+"%"; nd.style.background=t.color; }
+
+  const pk=prevMonthKey(month), pc=compute(pk), pt=tierOf(pc.score);
+  $("prevBox").innerHTML = pc.n>0
+    ? `Mes anterior · ${monthLabel(pk)}: <b style="color:${pt.color}">${fmtPct(pc.score)}</b> · ${pt.name}`
+    : `Mes anterior · ${monthLabel(pk)}: <span>sin datos</span>`;
 
   const vd=[
     {lbl:"1 · No Show de Tasker",w:"30%",v:c.m1,sub:"1 − no shows ÷ tareas activadas"},
@@ -343,12 +353,13 @@ $("addBtn").onclick = () => {
   $("f_noshows").value="0"; $("f_reempl").value="0";
   save().then(render);
 };
-$("addMonthBtn").onclick = () => { const v=$("newMonth").value; if(v){ month=v; render(); } };
+$("addMonthBtn").onclick = () => { const v=$("newMonth").value; if(v){ if(!monthsList.includes(v)) monthsList.push(v); month=v; saveLocal(); render(); } };
 $("monthSelect").onchange = (e)=>{ month=e.target.value; render(); };
 $("connectBtn").onclick = ()=>{ connect(true); };
 
 /* ============ Arranque: muestra ya, conecta en segundo plano ============ */
 month = curMonth();
+if(!monthsList.includes(month)) { monthsList.push(month); saveLocal(); }
 $("newMonth").value = curMonth();
 render();
 setStatus("", "Guardado local");
