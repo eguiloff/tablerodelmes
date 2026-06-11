@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tasky · Cumplimiento de Taskers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F5F3FB; --surface:#FFFFFF; --ink:#1E1B3A; --muted:#6B6B8A;
+    --hair:#ECE6F7; --accent:#7151F0; --accent-soft:#EEEAFD;
+    --good:#1F9D55; --warn:#C2860A; --bad:#C5452B;
+    --good-soft:#E7F4ED; --warn-soft:#FBF1DC; --bad-soft:#FAE8E3;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Poppins',system-ui,sans-serif;color:var(--ink);background:var(--paper);
+    -webkit-font-smoothing:antialiased;padding:26px 20px 60px;}
+  .wrap{max-width:1020px;margin:0 auto;}
+  .disp{font-family:'Poppins',sans-serif;}
+  button{font-family:'Poppins';cursor:pointer;}
+  input,select{font-family:'Poppins';}
+
+  .top{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:20px;}
+  .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600;}
+  .title{font-family:'Poppins';font-weight:700;font-size:26px;margin:4px 0 0;}
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  select,.minput{font-size:14px;padding:9px 12px;border:1px solid var(--hair);border-radius:9px;background:#fff;color:var(--ink);}
+  .btn{font-weight:600;font-size:13px;padding:9px 14px;border-radius:9px;border:1px solid var(--accent);background:var(--accent);color:#fff;}
+  .btn:hover{opacity:.88;} .btn.ghost{background:transparent;color:var(--accent);} .btn.tiny{padding:6px 10px;font-size:12px;}
+
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-family:'Poppins';
+    padding:7px 11px;border-radius:999px;border:1px solid var(--hair);background:#fff;color:var(--muted);}
+  .status .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
+  .status.ok{color:var(--good);border-color:var(--good-soft);background:var(--good-soft);}
+  .status.ok .dot{background:var(--good);}
+  .status.busy{color:var(--warn);} .status.busy .dot{background:var(--warn);}
+
+  .hero{background:var(--surface);border:1px solid var(--hair);border-radius:16px;padding:26px 28px;margin-bottom:18px;
+    display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center;}
+  @media(max-width:680px){.hero{grid-template-columns:1fr;gap:20px;}}
+  .score{font-family:'Poppins';font-weight:700;font-size:60px;line-height:.9;letter-spacing:-.02em;}
+  .scap{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:6px;}
+  .chip{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:7px 13px;border-radius:999px;font-weight:600;font-size:14px;}
+  .cdot{width:9px;height:9px;border-radius:50%;}
+  .meter{position:relative;height:30px;}
+  .track{display:flex;height:14px;border-radius:7px;overflow:hidden;}
+  .zone{height:100%;}
+  .needle{position:absolute;top:-9px;width:14px;height:14px;border-radius:50%;border:3px solid #fff;transform:translateX(-50%);box-shadow:0 1px 4px rgba(0,0,0,.25);}
+  .scale{display:flex;justify-content:space-between;margin-top:28px;font-size:11px;color:var(--muted);font-family:'Poppins';}
+
+  .vars{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;}
+  @media(max-width:680px){.vars{grid-template-columns:1fr;}}
+  .vcard{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden;}
+  .vcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent);}
+  .vlabel{font-size:13px;font-weight:600;padding-left:6px;}
+  .vweight{font-size:11px;color:var(--muted);font-family:'Poppins';float:right;}
+  .vval{font-family:'Poppins';font-weight:700;font-size:32px;margin:10px 0 2px;padding-left:6px;}
+  .vsub{font-size:11px;color:var(--muted);padding-left:6px;font-family:'Poppins';}
+
+  .panel{background:var(--surface);border:1px solid var(--hair);border-radius:16px;overflow:hidden;}
+  .phead{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--hair);}
+  .phead h2{font-family:'Poppins';font-weight:600;font-size:16px;margin:0;}
+  .phead .count{font-size:12px;color:var(--muted);font-family:'Poppins';}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:11px 12px;border-bottom:1px solid var(--hair);white-space:nowrap;}
+  td{padding:11px 12px;border-bottom:1px solid var(--hair);}
+  tr:last-child td{border-bottom:none;}
+  .num{font-family:'Poppins';font-variant-numeric:tabular-nums;text-align:center;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;font-family:'Poppins';}
+  .pill.y{background:var(--good-soft);color:var(--good);} .pill.n{background:var(--bad-soft);color:var(--bad);}
+  .del{border:none;background:none;color:var(--muted);font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;}
+  .del:hover{color:var(--bad);background:var(--bad-soft);}
+  .empty{padding:42px 20px;text-align:center;color:var(--muted);}
+  .empty .big{font-family:'Poppins';font-weight:600;font-size:17px;color:var(--ink);margin-bottom:5px;}
+  .formwrap{border-top:1px solid var(--hair);background:#FBFAFE;padding:18px 20px 22px;}
+  .formtitle{font-family:'Poppins';font-weight:600;font-size:14px;margin:0 0 14px;color:var(--ink);}
+  .formgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px 12px;align-items:end;}
+  .fld{display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .fld label{font-size:11.5px;font-weight:600;color:var(--ink);}
+  .fld label .hint{font-weight:500;color:var(--muted);font-size:10.5px;}
+  .fld input,.fld select{font-family:'Poppins';font-size:14px;padding:10px 11px;border:1.5px solid var(--hair);border-radius:10px;background:#fff;width:100%;color:var(--ink);transition:border-color .15s,box-shadow .15s;}
+  .fld input:focus,.fld select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+  .fld input::placeholder{color:#B8B2CC;}
+  .c2{grid-column:span 2;} .c3{grid-column:span 3;}
+  .addbtn{font-family:'Poppins';font-weight:600;font-size:14px;padding:12px 18px;border:none;border-radius:999px;background:var(--accent);color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(113,81,240,.28);transition:box-shadow .12s,opacity .12s,transform .12s;}
+  .addbtn:hover{opacity:.93;box-shadow:0 8px 22px rgba(113,81,240,.34);}
+  .addbtn:active{transform:translateY(1px);}
+  @media(max-width:760px){.formgrid{grid-template-columns:repeat(2,1fr);} .c2,.c3{grid-column:span 2;} .addbtn{width:100%;}}
+  .footer{margin-top:18px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;}
+  .note{font-size:11.5px;color:var(--muted);line-height:1.55;max-width:600px;}
+  .note b{color:var(--ink);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <div class="eyebrow">Tasky · Threshold de cumplimiento</div>
+      <h1 class="title">Tablero del mes</h1>
+    </div>
+    <div class="controls">
+      <select id="monthSelect"></select>
+      <input class="minput" type="month" id="newMonth" />
+      <button class="btn ghost tiny" id="addMonthBtn">+ Mes</button>
+      <span class="status" id="status"><span class="dot"></span><span id="statusText">Iniciando…</span></span>
+      <button class="btn tiny" id="connectBtn" style="display:none">Conectar Sheets</button>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <div class="score disp" id="scoreNum">—</div>
+      <div class="scap">Puntuación ponderada</div>
+      <div class="chip" id="bonoChip"><span class="cdot"></span><span id="bonoText"></span></div>
+    </div>
+    <div>
+      <div class="meter">
+        <div class="track">
+          <div class="zone" style="width:85%;background:var(--bad-soft)"></div>
+          <div class="zone" style="width:5%;background:var(--warn-soft)"></div>
+          <div class="zone" style="width:10%;background:var(--good-soft)"></div>
+        </div>
+        <div class="needle" id="needle" style="display:none"></div>
+      </div>
+      <div class="scale"><span>&lt;85% · sin bono</span><span>85–89% · 50%</span><span>≥90% · 100%</span></div>
+    </div>
+  </div>
+
+  <div class="vars" id="vars"></div>
+
+  <div class="panel">
+    <div class="phead">
+      <h2 id="panelTitle">Activaciones</h2>
+      <span class="count" id="panelCount"></span>
+    </div>
+    <div id="tableBox" style="overflow-x:auto"></div>
+    <div class="formwrap">
+      <h3 class="formtitle">Agregar activación</h3>
+      <div class="formgrid">
+        <div class="fld c2"><label>Activación</label><input id="f_nombre" placeholder="Nombre del evento" /></div>
+        <div class="fld"><label>Fecha del evento</label><input id="f_fecha" type="date" /></div>
+        <div class="fld"><label>Tamaño <span class="hint">personas</span></label><input id="f_tamano" type="number" min="0" placeholder="0" /></div>
+
+        <div class="fld"><label>Tareas activadas <span class="hint">total</span></label><input id="f_tareas" type="number" min="0" placeholder="0" /></div>
+        <div class="fld"><label>No shows</label><input id="f_noshows" type="number" min="0" value="0" /></div>
+        <div class="fld"><label>¿Pedido con ≥96 hs?</label><select id="f_p96"><option>Sí</option><option>No</option></select></div>
+        <div class="fld"><label>¿Asignación lista 48 hs antes?</label><select id="f_a48"><option>Sí</option><option>No</option></select></div>
+
+        <div class="fld"><label>Reemplazos <span class="hint">efectivos 24 hs antes</span></label><input id="f_reempl" type="number" min="0" value="0" /></div>
+        <button class="addbtn c3" id="addBtn">Agregar activación</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="note"><b>Cómo se calcula.</b> No Show 30%, Asignación 48 hs 40%, Reemplazos 30%. Reemplazos requeridos: ≤3→1, 4–10→2, &gt;10→3. Una variable sin casos aplicables se marca <b>—</b> y el puntaje se reparte entre las demás.</div>
+  </div>
+
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+/* ============ CONFIG (tu cuenta Tasky, ya creada) ============ */
+const CLIENT_ID = "224276578466-ndlqgjuv59pib8jepngiooa1m96qgrap.apps.googleusercontent.com";
+const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+const TAB = "Registro";
+const HEADER = ["mes","fecha","nombre","tamano","totalTareas","noShows","pedido96","asig48","reemplazos","id"];
+const WEIGHTS = { m1:0.3, m2:0.4, m3:0.3 };
+const LS_ROWS = "tasky_cmp_rows";
+const SHEET_ID = "1V1CXCeDbYWWZCIAi7WF8x6Imei6TPXGacbCP_6UP504";  // planilla fija "Tasky - Cumplimiento de Taskers"
+
+let tokenClient = null, accessToken = null, connected = false;
+let rows = JSON.parse(localStorage.getItem(LS_ROWS) || "[]");
+let sheetId = SHEET_ID;
+let month = null;
+
+const $ = (id) => document.getElementById(id);
+const reqRepl = (s) => (s <= 3 ? 1 : s <= 10 ? 2 : 3);
+const fmtPct = (v) => (v == null ? "—" : (v*100).toFixed(1) + "%");
+const curMonth = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
+const monthLabel = (k) => { const n=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"]; const [y,m]=k.split("-"); return n[parseInt(m,10)-1]+" "+y; };
+const escapeHtml = (s) => (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function setStatus(state, text) {
+  const el = $("status");
+  el.className = "status" + (state ? " " + state : "");
+  $("statusText").textContent = text;
+  $("connectBtn").style.display = (state === "" && text === "Guardado local") ? "inline-block" : "none";
+}
+function saveLocal(){ localStorage.setItem(LS_ROWS, JSON.stringify(rows)); }
+
+/* ============ Google auth (auto, en segundo plano) ============ */
+function gisReady(cb){ if (window.google && google.accounts && google.accounts.oauth2) cb(); else setTimeout(()=>gisReady(cb), 200); }
+function initToken() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID, scope: SCOPE,
+    callback: async (resp) => {
+      if (resp && resp.access_token) {
+        accessToken = resp.access_token; connected = true;
+        setStatus("busy", "Sincronizando…");
+        try { await syncOnConnect(); setStatus("ok", "Guardado en Sheets"); }
+        catch(e){ console.error(e); setStatus("", "Guardado local"); }
+        render();
+      } else { setStatus("", "Guardado local"); }
+    },
+    error_callback: () => { setStatus("", "Guardado local"); },
+  });
+}
+function connect(interactive) {
+  if (!tokenClient) return;
+  tokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
+}
+
+/* ============ Sheets API ============ */
+async function sheets(path, opts={}) {
+  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets" + path, {
+    ...opts, headers: { Authorization:"Bearer "+accessToken, "Content-Type":"application/json", ...(opts.headers||{}) },
+  });
+  if (res.status === 401) { connected=false; connect(true); throw new Error("reauth"); }
+  if (!res.ok) throw new Error("Sheets " + res.status);
+  return res.json();
+}
+async function ensureSheet() {
+  // Usa la planilla fija: garantiza que exista la pestaña Registro y su encabezado.
+  const meta = await sheets("/"+sheetId+"?fields=sheets.properties.title");
+  const titles = (meta.sheets||[]).map(s=>s.properties.title);
+  if (!titles.includes(TAB)) {
+    await sheets("/"+sheetId+":batchUpdate", { method:"POST", body: JSON.stringify({ requests:[{ addSheet:{ properties:{ title:TAB } } }] }) });
+  }
+  const h = await sheets("/"+sheetId+"/values/"+TAB+"!A1:J1");
+  if (!h.values || !h.values.length) {
+    await sheets("/"+sheetId+"/values/"+TAB+"!A1?valueInputOption=RAW", { method:"PUT", body: JSON.stringify({ values:[HEADER] }) });
+  }
+}
+function parseRemote(vals){
+  return (vals||[]).slice(1).filter(x=>x&&x.length).map(x=>({
+    mes:x[0]||"", fecha:x[1]||"", nombre:x[2]||"", tamano:Number(x[3])||0, totalTareas:Number(x[4])||0,
+    noShows:Number(x[5])||0, pedido96:x[6]||"Sí", asig48:x[7]||"Sí", reemplazos:Number(x[8])||0, id:x[9]||String(Math.random()),
+  }));
+}
+async function syncOnConnect() {
+  await ensureSheet();
+  const r = await sheets("/"+sheetId+"/values/"+TAB+"!A1:J100000");
+  const remote = parseRemote(r.values);
+  if (remote.length) { rows = remote; saveLocal(); }        // Sheets manda si tiene datos
+  else if (rows.length) { await pushToSheets(); }            // sembrar Sheets desde respaldo local
+}
+async function pushToSheets() {
+  if (!connected) return;
+  await ensureSheet();
+  await sheets("/"+sheetId+"/values/"+TAB+"!A2:J100000:clear", { method:"POST", body:"{}" });
+  if (rows.length) {
+    const values = rows.map(r=>[r.mes,r.fecha,r.nombre,r.tamano,r.totalTareas,r.noShows,r.pedido96,r.asig48,r.reemplazos,r.id]);
+    await sheets("/"+sheetId+"/values/"+TAB+"!A2?valueInputOption=RAW", { method:"PUT", body: JSON.stringify({ values }) });
+  }
+}
+async function save() {
+  saveLocal();                       // respaldo instantáneo y offline
+  if (connected) {
+    setStatus("busy","Guardando…");
+    try { await pushToSheets(); setStatus("ok","Guardado en Sheets"); }
+    catch(e){ if(e.message!=="reauth"){ console.error(e); setStatus("","Guardado local"); } }
+  }
+}
+
+/* ============ Cálculo ============ */
+function compute(m) {
+  const list = rows.filter(r=>r.mes===m).map(r=>({ ...r, req:reqRepl(r.tamano), suf:(r.reemplazos>=reqRepl(r.tamano)) }));
+  const n=list.length;
+  const sumT=list.reduce((s,r)=>s+r.totalTareas,0), sumNS=list.reduce((s,r)=>s+r.noShows,0);
+  const elig=list.filter(r=>r.pedido96==="Sí"), eligOk=elig.filter(r=>r.asig48==="Sí").length, sufOk=list.filter(r=>r.suf).length;
+  const m1=sumT>0?1-sumNS/sumT:null, m2=elig.length>0?eligOk/elig.length:null, m3=n>0?sufOk/n:null;
+  const parts=[{v:m1,w:WEIGHTS.m1},{v:m2,w:WEIGHTS.m2},{v:m3,w:WEIGHTS.m3}].filter(p=>p.v!=null);
+  const ws=parts.reduce((s,p)=>s+p.w,0);
+  const score=ws>0?parts.reduce((s,p)=>s+p.v*p.w,0)/ws:null;
+  return { list,n,m1,m2,m3,score };
+}
+function tierOf(s){
+  if(s==null) return {name:"Sin datos",color:"var(--muted)",soft:"var(--paper)",bono:"—"};
+  if(s>=0.9)  return {name:"Cumple",color:"var(--good)",soft:"var(--good-soft)",bono:"100% del variable"};
+  if(s>=0.85) return {name:"Parcial",color:"var(--warn)",soft:"var(--warn-soft)",bono:"50% del variable"};
+  return {name:"No cumple",color:"var(--bad)",soft:"var(--bad-soft)",bono:"0%"};
+}
+
+/* ============ Render ============ */
+function render() {
+  const months=[...new Set(rows.map(r=>r.mes))];
+  if(!month) month=curMonth();
+  if(!months.includes(month)) months.push(month);
+  months.sort().reverse();
+  $("monthSelect").innerHTML=months.map(k=>`<option value="${k}" ${k===month?"selected":""}>${monthLabel(k)}</option>`).join("");
+
+  const c=compute(month), t=tierOf(c.score);
+  $("scoreNum").textContent=fmtPct(c.score); $("scoreNum").style.color=t.color;
+  $("bonoChip").style.background=t.soft; $("bonoChip").style.color=t.color;
+  $("bonoChip").querySelector(".cdot").style.background=t.color;
+  $("bonoText").textContent=t.name+" · Bono "+t.bono;
+  const nd=$("needle");
+  if(c.score==null){ nd.style.display="none"; } else { nd.style.display="block"; nd.style.left=(c.score*100)+"%"; nd.style.background=t.color; }
+
+  const vd=[
+    {lbl:"1 · No Show de Tasker",w:"30%",v:c.m1,sub:"1 − no shows ÷ tareas activadas"},
+    {lbl:"2 · Asignación 48 hs antes",w:"40%",v:c.m2,sub:"completas ÷ pedidas con ≥96 hs"},
+    {lbl:"3 · Asignación reemplazos",w:"30%",v:c.m3,sub:"activaciones ok ÷ total"},
+  ];
+  $("vars").innerHTML=vd.map(x=>`<div class="vcard"><span class="vweight">peso ${x.w}</span>
+    <div class="vlabel">${x.lbl}</div>
+    <div class="vval" style="color:${x.v==null?"var(--muted)":"var(--ink)"}">${fmtPct(x.v)}</div>
+    <div class="vsub">${x.sub}</div></div>`).join("");
+
+  $("panelTitle").textContent="Activaciones de "+monthLabel(month);
+  $("panelCount").textContent=c.n+(c.n===1?" activación":" activaciones");
+  if(c.n===0){
+    $("tableBox").innerHTML=`<div class="empty"><div class="big">Todavía no hay activaciones este mes</div><div>Cargá la primera abajo. Se guarda al instante (y en Sheets cuando hay conexión).</div></div>`;
+  } else {
+    $("tableBox").innerHTML=`<table><thead><tr>
+      <th>Fecha</th><th>Activación</th><th>Tamaño</th><th>Tareas</th><th>No shows</th><th>≥96 hs</th><th>48 hs</th><th>Reempl.</th><th>Req.</th><th>Suf.</th><th></th>
+      </tr></thead><tbody>${c.list.map(r=>`<tr>
+      <td class="num" style="color:var(--muted)">${r.fecha||"—"}</td>
+      <td style="font-weight:500">${escapeHtml(r.nombre)}</td>
+      <td class="num">${r.tamano}</td><td class="num">${r.totalTareas}</td>
+      <td class="num" style="${r.noShows>0?"color:var(--bad)":""}">${r.noShows}</td>
+      <td class="num"><span class="pill ${r.pedido96==="Sí"?"y":"n"}">${r.pedido96}</span></td>
+      <td class="num"><span class="pill ${r.asig48==="Sí"?"y":"n"}">${r.asig48}</span></td>
+      <td class="num">${r.reemplazos}</td>
+      <td class="num" style="color:var(--muted)">${r.req}</td>
+      <td class="num"><span class="pill ${r.suf?"y":"n"}">${r.suf?"Sí":"No"}</span></td>
+      <td><button class="del" data-id="${r.id}">×</button></td></tr>`).join("")}</tbody></table>`;
+    $("tableBox").querySelectorAll(".del").forEach(b=>b.onclick=()=>{ rows=rows.filter(r=>r.id!==b.dataset.id); save().then(render); });
+  }
+}
+
+/* ============ Eventos ============ */
+$("addBtn").onclick = () => {
+  const nombre=$("f_nombre").value.trim(), tamano=Number($("f_tamano").value), tareas=Number($("f_tareas").value);
+  if(!nombre||!tamano||!tareas) return;
+  rows.push({ mes:month, fecha:$("f_fecha").value, nombre, tamano, totalTareas:tareas,
+    noShows:Number($("f_noshows").value)||0, pedido96:$("f_p96").value, asig48:$("f_a48").value,
+    reemplazos:Number($("f_reempl").value)||0, id:String(Date.now()) });
+  ["f_nombre","f_fecha","f_tamano","f_tareas"].forEach(i=>$(i).value="");
+  $("f_noshows").value="0"; $("f_reempl").value="0";
+  save().then(render);
+};
+$("addMonthBtn").onclick = () => { const v=$("newMonth").value; if(v){ month=v; render(); } };
+$("monthSelect").onchange = (e)=>{ month=e.target.value; render(); };
+$("connectBtn").onclick = ()=>{ connect(true); };
+
+/* ============ Arranque: muestra ya, conecta en segundo plano ============ */
+month = curMonth();
+$("newMonth").value = curMonth();
+render();
+setStatus("", "Guardado local");
+gisReady(() => { initToken(); connect(false); });   // intento silencioso; si necesita permiso, aparece "Conectar Sheets"
+</script>
+</body>
+</html>
