@@ -98,6 +98,10 @@
   .rcard p{font-size:13.5px;color:var(--muted);line-height:1.55;margin:0 0 8px;}
   .rcard .rsmall{font-size:12.5px;}
   .ribadge{width:50px;height:50px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto;font-weight:700;font-size:15px;font-family:'Poppins';}
+  .prow{cursor:pointer;transition:background .12s;}
+  .prow:hover{background:var(--accent-soft);}
+  .prow.on{background:var(--accent-soft);}
+  #personSelect{max-width:170px;}
 </style>
 </head>
 <body>
@@ -110,6 +114,7 @@
     </div>
     <div class="controls">
       <select id="monthSelect"></select>
+      <select id="personSelect" title="Ver por responsable"></select>
       <input class="minput" type="month" id="newMonth" />
       <button class="btn ghost tiny" id="addMonthBtn">+ Mes</button>
       <span class="status" id="status"><span class="dot"></span><span id="statusText">Iniciando…</span></span>
@@ -139,6 +144,14 @@
 
   <div class="vars" id="vars"></div>
 
+  <div class="panel" id="byPersonPanel" style="margin-bottom:20px">
+    <div class="phead">
+      <h2>Resumen por persona</h2>
+      <span class="count" id="byPersonCount"></span>
+    </div>
+    <div id="byPersonBox" style="overflow-x:auto"></div>
+  </div>
+
   <div class="panel">
     <div class="phead">
       <h2 id="panelTitle">Activaciones</h2>
@@ -149,16 +162,18 @@
       <h3 class="formtitle">Agregar activación</h3>
       <div class="formgrid">
         <div class="fld c2"><label>Activación</label><input id="f_nombre" placeholder="Nombre del evento" /></div>
+        <div class="fld"><label>Responsable</label><input id="f_resp" list="respList" placeholder="Persona de Ops" /></div>
         <div class="fld"><label>Fecha del evento</label><input id="f_fecha" type="date" /></div>
-        <div class="fld"><label>Tamaño <span class="hint">personas</span></label><input id="f_tamano" type="number" min="0" placeholder="0" /></div>
 
+        <div class="fld"><label>Tamaño <span class="hint">personas</span></label><input id="f_tamano" type="number" min="0" placeholder="0" /></div>
         <div class="fld"><label>Tareas activadas <span class="hint">total</span></label><input id="f_tareas" type="number" min="0" placeholder="0" /></div>
         <div class="fld"><label>No shows</label><input id="f_noshows" type="number" min="0" value="0" /></div>
         <div class="fld"><label>¿Pedido con ≥96 hs?</label><select id="f_p96"><option>Sí</option><option>No</option></select></div>
-        <div class="fld"><label>¿Asignación lista 48 hs antes?</label><select id="f_a48"><option>Sí</option><option>No</option></select></div>
 
+        <div class="fld"><label>¿Asignación lista 48 hs antes?</label><select id="f_a48"><option>Sí</option><option>No</option></select></div>
         <div class="fld"><label>Reemplazos <span class="hint">efectivos 24 hs antes</span></label><input id="f_reempl" type="number" min="0" value="0" /></div>
-        <button class="addbtn c3" id="addBtn">Agregar activación</button>
+        <button class="addbtn c2" id="addBtn">Agregar activación</button>
+        <datalist id="respList"></datalist>
       </div>
     </div>
   </div>
@@ -185,7 +200,7 @@ const CLIENT_ID = "224276578466-ndlqgjuv59pib8jepngiooa1m96qgrap.apps.googleuser
 const SCOPE = "openid email https://www.googleapis.com/auth/spreadsheets";
 const TAB = "Registro";
 const AUTH_TAB = "Autorizados";
-const HEADER = ["mes","fecha","nombre","tamano","totalTareas","noShows","pedido96","asig48","reemplazos","id"];
+const HEADER = ["mes","fecha","nombre","tamano","totalTareas","noShows","pedido96","asig48","reemplazos","id","responsable"];
 const WEIGHTS = { m1:0.3, m2:0.4, m3:0.3 };
 const LS_ROWS = "tasky_cmp_rows";
 const LS_MONTHS = "tasky_cmp_months";
@@ -196,6 +211,8 @@ let rows = JSON.parse(localStorage.getItem(LS_ROWS) || "[]");
 let monthsList = JSON.parse(localStorage.getItem(LS_MONTHS) || "[]");
 let sheetId = SHEET_ID;
 let month = null;
+let person = "__all__";
+const respOf = (r) => ((r.responsable||"").trim() || "Sin asignar");
 
 const $ = (id) => document.getElementById(id);
 const reqRepl = (s) => (s <= 3 ? 1 : s <= 10 ? 2 : 3);
@@ -290,7 +307,7 @@ async function ensureSheet() {
   if (!titles.includes(TAB)) {
     await sheets("/"+sheetId+":batchUpdate", { method:"POST", body: JSON.stringify({ requests:[{ addSheet:{ properties:{ title:TAB } } }] }) });
   }
-  const h = await sheets("/"+sheetId+"/values/"+TAB+"!A1:J1");
+  const h = await sheets("/"+sheetId+"/values/"+TAB+"!A1:K1");
   if (!h.values || !h.values.length) {
     await sheets("/"+sheetId+"/values/"+TAB+"!A1?valueInputOption=RAW", { method:"PUT", body: JSON.stringify({ values:[HEADER] }) });
   }
@@ -298,12 +315,12 @@ async function ensureSheet() {
 function parseRemote(vals){
   return (vals||[]).slice(1).filter(x=>x&&x.length).map(x=>({
     mes:x[0]||"", fecha:x[1]||"", nombre:x[2]||"", tamano:Number(x[3])||0, totalTareas:Number(x[4])||0,
-    noShows:Number(x[5])||0, pedido96:x[6]||"Sí", asig48:x[7]||"Sí", reemplazos:Number(x[8])||0, id:x[9]||String(Math.random()),
+    noShows:Number(x[5])||0, pedido96:x[6]||"Sí", asig48:x[7]||"Sí", reemplazos:Number(x[8])||0, id:x[9]||String(Math.random()), responsable:x[10]||"",
   }));
 }
 async function syncOnConnect() {
   await ensureSheet();
-  const r = await sheets("/"+sheetId+"/values/"+TAB+"!A1:J100000");
+  const r = await sheets("/"+sheetId+"/values/"+TAB+"!A1:K100000");
   const remote = parseRemote(r.values);
   if (remote.length) { rows = remote; saveLocal(); }        // Sheets manda si tiene datos
   else if (rows.length) { await pushToSheets(); }            // sembrar Sheets desde respaldo local
@@ -311,9 +328,9 @@ async function syncOnConnect() {
 async function pushToSheets() {
   if (!connected) return;
   await ensureSheet();
-  await sheets("/"+sheetId+"/values/"+TAB+"!A2:J100000:clear", { method:"POST", body:"{}" });
+  await sheets("/"+sheetId+"/values/"+TAB+"!A2:K100000:clear", { method:"POST", body:"{}" });
   if (rows.length) {
-    const values = rows.map(r=>[r.mes,r.fecha,r.nombre,r.tamano,r.totalTareas,r.noShows,r.pedido96,r.asig48,r.reemplazos,r.id]);
+    const values = rows.map(r=>[r.mes,r.fecha,r.nombre,r.tamano,r.totalTareas,r.noShows,r.pedido96,r.asig48,r.reemplazos,r.id,r.responsable||""]);
     await sheets("/"+sheetId+"/values/"+TAB+"!A2?valueInputOption=RAW", { method:"PUT", body: JSON.stringify({ values }) });
   }
 }
@@ -327,8 +344,8 @@ async function save() {
 }
 
 /* ============ Cálculo ============ */
-function compute(m) {
-  const list = rows.filter(r=>r.mes===m).map(r=>({ ...r, req:reqRepl(r.tamano), suf:(r.reemplazos>=reqRepl(r.tamano)) }));
+function compute(m, who) {
+  const list = rows.filter(r=>r.mes===m && (!who || who==="__all__" || respOf(r)===who)).map(r=>({ ...r, req:reqRepl(r.tamano), suf:(r.reemplazos>=reqRepl(r.tamano)) }));
   const n=list.length;
   const sumT=list.reduce((s,r)=>s+r.totalTareas,0), sumNS=list.reduce((s,r)=>s+r.noShows,0);
   const elig=list.filter(r=>r.pedido96==="Sí"), eligOk=elig.filter(r=>r.asig48==="Sí").length, sufOk=list.filter(r=>r.suf).length;
@@ -352,7 +369,13 @@ function render() {
   months.sort().reverse();
   $("monthSelect").innerHTML=months.map(k=>`<option value="${k}" ${k===month?"selected":""}>${monthLabel(k)}</option>`).join("");
 
-  const c=compute(month), t=tierOf(c.score);
+  const peopleMonth=[...new Set(rows.filter(r=>r.mes===month).map(respOf))].sort();
+  const peopleAll=[...new Set(rows.map(respOf).filter(p=>p!=="Sin asignar"))].sort();
+  if(person!=="__all__" && !peopleMonth.includes(person)) person="__all__";
+  $("personSelect").innerHTML=`<option value="__all__">Todos</option>`+peopleMonth.map(p=>`<option value="${escapeHtml(p)}" ${p===person?"selected":""}>${escapeHtml(p)}</option>`).join("");
+  $("respList").innerHTML=peopleAll.map(p=>`<option value="${escapeHtml(p)}"></option>`).join("");
+
+  const c=compute(month, person), t=tierOf(c.score);
   $("scoreNum").textContent=fmtPct(c.score); $("scoreNum").style.color=t.color;
   $("bonoChip").style.background=t.soft; $("bonoChip").style.color=t.color;
   $("bonoChip").querySelector(".cdot").style.background=t.color;
@@ -360,7 +383,7 @@ function render() {
   const nd=$("needle");
   if(c.score==null){ nd.style.display="none"; } else { nd.style.display="block"; nd.style.left=(c.score*100)+"%"; nd.style.background=t.color; }
 
-  const pk=prevMonthKey(month), pc=compute(pk), pt=tierOf(pc.score);
+  const pk=prevMonthKey(month), pc=compute(pk, person), pt=tierOf(pc.score);
   $("prevBox").innerHTML = pc.n>0
     ? `Mes anterior · ${monthLabel(pk)}: <b style="color:${pt.color}">${fmtPct(pc.score)}</b> · ${pt.name}`
     : `Mes anterior · ${monthLabel(pk)}: <span>sin datos</span>`;
@@ -375,16 +398,34 @@ function render() {
     <div class="vval" style="color:${x.v==null?"var(--muted)":"var(--ink)"}">${fmtPct(x.v)}</div>
     <div class="vsub">${x.sub}</div></div>`).join("");
 
-  $("panelTitle").textContent="Activaciones de "+monthLabel(month);
+  const summ=peopleMonth.map(p=>({p, c:compute(month,p)})).filter(x=>x.c.n>0);
+  $("byPersonCount").textContent = summ.length + (summ.length===1?" persona":" personas");
+  if(summ.length===0){
+    $("byPersonBox").innerHTML=`<div class="empty"><div>Asigná un responsable a cada activación para ver quién cumplió y quién no.</div></div>`;
+  } else {
+    $("byPersonBox").innerHTML=`<table><thead><tr>
+      <th>Responsable</th><th>No Show</th><th>Asig. 48 hs</th><th>Reemplazos</th><th>Activ.</th><th>Puntaje</th><th>Bono</th>
+      </tr></thead><tbody>${summ.map(({p,c})=>{const tt=tierOf(c.score);return `<tr class="prow${p===person?' on':''}" data-p="${escapeHtml(p)}">
+      <td style="font-weight:600">${escapeHtml(p)}</td>
+      <td class="num">${fmtPct(c.m1)}</td><td class="num">${fmtPct(c.m2)}</td><td class="num">${fmtPct(c.m3)}</td>
+      <td class="num" style="color:var(--muted)">${c.n}</td>
+      <td class="num"><b style="color:${tt.color}">${fmtPct(c.score)}</b></td>
+      <td class="num"><span class="pill" style="background:${tt.soft};color:${tt.color}">${tt.bono}</span></td>
+      </tr>`;}).join("")}</tbody></table>`;
+    $("byPersonBox").querySelectorAll(".prow").forEach(tr=>tr.onclick=()=>{ person=(person===tr.dataset.p?"__all__":tr.dataset.p); render(); });
+  }
+
+  $("panelTitle").textContent="Activaciones de "+monthLabel(month)+(person!=="__all__"?" · "+person:"");
   $("panelCount").textContent=c.n+(c.n===1?" activación":" activaciones");
   if(c.n===0){
     $("tableBox").innerHTML=`<div class="empty"><div class="big">Todavía no hay activaciones este mes</div><div>Cargá la primera abajo. Se guarda al instante (y en Sheets cuando hay conexión).</div></div>`;
   } else {
     $("tableBox").innerHTML=`<table><thead><tr>
-      <th>Fecha</th><th>Activación</th><th>Tamaño</th><th>Tareas</th><th>No shows</th><th>≥96 hs</th><th>48 hs</th><th>Reempl.</th><th>Req.</th><th>Suf.</th><th></th>
+      <th>Fecha</th><th>Activación</th><th>Responsable</th><th>Tamaño</th><th>Tareas</th><th>No shows</th><th>≥96 hs</th><th>48 hs</th><th>Reempl.</th><th>Req.</th><th>Suf.</th><th></th>
       </tr></thead><tbody>${c.list.map(r=>`<tr>
       <td class="num" style="color:var(--muted)">${r.fecha||"—"}</td>
       <td style="font-weight:500">${escapeHtml(r.nombre)}</td>
+      <td>${escapeHtml(respOf(r))}</td>
       <td class="num">${r.tamano}</td><td class="num">${r.totalTareas}</td>
       <td class="num" style="${r.noShows>0?"color:var(--bad)":""}">${r.noShows}</td>
       <td class="num"><span class="pill ${r.pedido96==="Sí"?"y":"n"}">${r.pedido96}</span></td>
@@ -401,13 +442,14 @@ function render() {
 $("addBtn").onclick = () => {
   const nombre=$("f_nombre").value.trim(), tamano=Number($("f_tamano").value), tareas=Number($("f_tareas").value);
   if(!nombre||!tamano||!tareas) return;
-  rows.push({ mes:month, fecha:$("f_fecha").value, nombre, tamano, totalTareas:tareas,
+  rows.push({ mes:month, fecha:$("f_fecha").value, nombre, responsable:$("f_resp").value.trim(), tamano, totalTareas:tareas,
     noShows:Number($("f_noshows").value)||0, pedido96:$("f_p96").value, asig48:$("f_a48").value,
     reemplazos:Number($("f_reempl").value)||0, id:String(Date.now()) });
-  ["f_nombre","f_fecha","f_tamano","f_tareas"].forEach(i=>$(i).value="");
+  ["f_nombre","f_fecha","f_resp","f_tamano","f_tareas"].forEach(i=>$(i).value="");
   $("f_noshows").value="0"; $("f_reempl").value="0";
   save().then(render);
 };
+$("personSelect").onchange = (e)=>{ person=e.target.value; render(); };
 $("addMonthBtn").onclick = () => { const v=$("newMonth").value; if(v){ if(!monthsList.includes(v)) monthsList.push(v); month=v; saveLocal(); render(); } };
 $("monthSelect").onchange = (e)=>{ month=e.target.value; render(); };
 $("connectBtn").onclick = ()=>{ connect(true); };
