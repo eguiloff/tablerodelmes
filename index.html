@@ -92,6 +92,12 @@
   .footer{margin-top:18px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;}
   .note{font-size:11.5px;color:var(--muted);line-height:1.55;max-width:600px;}
   .note b{color:var(--ink);}
+  #restricted{position:fixed;inset:0;background:rgba(30,27,58,.55);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .rcard{background:var(--surface);border:1px solid var(--hair);border-radius:18px;max-width:430px;width:100%;padding:30px 28px;text-align:center;box-shadow:0 20px 60px rgba(30,27,58,.28);}
+  .rcard h2{font-family:'Poppins';font-weight:700;font-size:20px;margin:8px 0 10px;color:var(--ink);}
+  .rcard p{font-size:13.5px;color:var(--muted);line-height:1.55;margin:0 0 8px;}
+  .rcard .rsmall{font-size:12.5px;}
+  .ribadge{width:50px;height:50px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto;font-weight:700;font-size:15px;font-family:'Poppins';}
 </style>
 </head>
 <body>
@@ -163,19 +169,29 @@
 
 </div>
 
+<div id="restricted" style="display:none">
+  <div class="rcard">
+    <div class="ribadge">Ops</div>
+    <h2>Acceso restringido</h2>
+    <p>Esta herramienta es solo para el equipo de Ops de Tasky. La cuenta <b id="restrictedEmail"></b> no está autorizada.</p>
+    <p class="rsmall">Pedí a un administrador que sume tu correo en la pestaña <b>Autorizados</b> de la planilla.</p>
+  </div>
+</div>
+
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 /* ============ CONFIG (tu cuenta Tasky, ya creada) ============ */
 const CLIENT_ID = "224276578466-ndlqgjuv59pib8jepngiooa1m96qgrap.apps.googleusercontent.com";
-const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+const SCOPE = "openid email https://www.googleapis.com/auth/spreadsheets";
 const TAB = "Registro";
+const AUTH_TAB = "Autorizados";
 const HEADER = ["mes","fecha","nombre","tamano","totalTareas","noShows","pedido96","asig48","reemplazos","id"];
 const WEIGHTS = { m1:0.3, m2:0.4, m3:0.3 };
 const LS_ROWS = "tasky_cmp_rows";
 const LS_MONTHS = "tasky_cmp_months";
 const SHEET_ID = "1V1CXCeDbYWWZCIAi7WF8x6Imei6TPXGacbCP_6UP504";  // planilla fija "Tasky - Cumplimiento de Taskers"
 
-let tokenClient = null, accessToken = null, connected = false;
+let tokenClient = null, accessToken = null, connected = false, userEmail = null;
 let rows = JSON.parse(localStorage.getItem(LS_ROWS) || "[]");
 let monthsList = JSON.parse(localStorage.getItem(LS_MONTHS) || "[]");
 let sheetId = SHEET_ID;
@@ -204,11 +220,18 @@ function initToken() {
     client_id: CLIENT_ID, scope: SCOPE,
     callback: async (resp) => {
       if (resp && resp.access_token) {
-        accessToken = resp.access_token; connected = true;
-        setStatus("busy", "Sincronizando…");
-        try { await syncOnConnect(); setStatus("ok", "Guardado en Sheets"); }
-        catch(e){ console.error(e); setStatus("", "Guardado local"); }
-        render();
+        accessToken = resp.access_token;
+        setStatus("busy", "Verificando acceso…");
+        try {
+          userEmail = await getEmail();
+          const ok = await checkAccess(userEmail);
+          if (!ok) { showRestricted(userEmail); setStatus("", "Sin acceso"); return; }
+          connected = true;
+          setStatus("busy", "Sincronizando…");
+          await syncOnConnect();
+          setStatus("ok", "Guardado en Sheets");
+          render();
+        } catch(e){ console.error(e); setStatus("", "Guardado local"); }
       } else { setStatus("", "Guardado local"); }
     },
     error_callback: () => { setStatus("", "Guardado local"); },
@@ -217,6 +240,38 @@ function initToken() {
 function connect(interactive) {
   if (!tokenClient) return;
   tokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
+}
+
+/* ============ Control de acceso (lista Autorizados) ============ */
+async function getEmail() {
+  const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers:{ Authorization:"Bearer "+accessToken } });
+  if (!res.ok) return null;
+  const j = await res.json();
+  return (j.email||"").trim().toLowerCase();
+}
+async function readAllowlist() {
+  // Garantiza la pestaña "Autorizados" (con encabezado) y devuelve los correos cargados.
+  const meta = await sheets("/"+sheetId+"?fields=sheets.properties.title");
+  const titles = (meta.sheets||[]).map(s=>s.properties.title);
+  if (!titles.includes(AUTH_TAB)) {
+    await sheets("/"+sheetId+":batchUpdate", { method:"POST", body: JSON.stringify({ requests:[{ addSheet:{ properties:{ title:AUTH_TAB } } }] }) });
+    await sheets("/"+sheetId+"/values/"+AUTH_TAB+"!A1?valueInputOption=RAW", { method:"PUT", body: JSON.stringify({ values:[["email"]] }) });
+  }
+  const r = await sheets("/"+sheetId+"/values/"+AUTH_TAB+"!A2:A1000");
+  return (r.values||[]).map(x=>(x[0]||"").trim().toLowerCase()).filter(Boolean);
+}
+async function checkAccess(email) {
+  try {
+    const list = await readAllowlist();
+    // Lista vacía => no hay filtro todavía (el control real sigue siendo con quién está compartida la planilla).
+    return list.length === 0 || list.includes((email||"").toLowerCase());
+  } catch(e) {
+    return false; // si no puede leer la planilla, no tiene acceso
+  }
+}
+function showRestricted(email) {
+  $("restrictedEmail").textContent = email || "tu cuenta";
+  $("restricted").style.display = "flex";
 }
 
 /* ============ Sheets API ============ */
