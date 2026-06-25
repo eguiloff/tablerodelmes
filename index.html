@@ -84,11 +84,11 @@
   .fld input,.fld select{font-family:'Poppins';font-size:14px;padding:10px 11px;border:1.5px solid var(--hair);border-radius:10px;background:#fff;width:100%;color:var(--ink);transition:border-color .15s,box-shadow .15s;}
   .fld input:focus,.fld select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
   .fld input::placeholder{color:#B8B2CC;}
-  .c2{grid-column:span 2;} .c3{grid-column:span 3;}
+  .c2{grid-column:span 2;} .c3{grid-column:span 3;} .c4{grid-column:span 4;}
   .addbtn{font-family:'Poppins';font-weight:600;font-size:14px;padding:12px 18px;border:none;border-radius:999px;background:var(--accent);color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(113,81,240,.28);transition:box-shadow .12s,opacity .12s,transform .12s;}
   .addbtn:hover{opacity:.93;box-shadow:0 8px 22px rgba(113,81,240,.34);}
   .addbtn:active{transform:translateY(1px);}
-  @media(max-width:760px){.formgrid{grid-template-columns:repeat(2,1fr);} .c2,.c3{grid-column:span 2;} .addbtn{width:100%;}}
+  @media(max-width:760px){.formgrid{grid-template-columns:repeat(2,1fr);} .c2,.c3,.c4{grid-column:span 2;} .addbtn{width:100%;}}
   .footer{margin-top:18px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;}
   .note{font-size:11.5px;color:var(--muted);line-height:1.55;max-width:600px;}
   .note b{color:var(--ink);}
@@ -104,6 +104,8 @@
   .prow:hover{background:var(--accent-soft);}
   .prow.on{background:var(--accent-soft);}
   #personSelect{max-width:170px;}
+  .inccell{max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12.5px;}
+  .incdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warn);margin-right:6px;vertical-align:middle;}
 </style>
 </head>
 <body>
@@ -174,7 +176,8 @@
 
         <div class="fld"><label>¿Asignación lista 48 hs antes?</label><select id="f_a48"><option>Sí</option><option>No</option></select></div>
         <div class="fld"><label>Reemplazos <span class="hint">efectivos 24 hs antes</span></label><input id="f_reempl" type="number" min="0" value="0" /></div>
-        <button class="addbtn c2" id="addBtn">Agregar activación</button>
+        <div class="fld c2"><label>Incidencias <span class="hint">opcional</span></label><input id="f_inc" placeholder="Ej: Tasker llegó tarde, queja del cliente…" /></div>
+        <button class="addbtn c4" id="addBtn">Agregar activación</button>
         <datalist id="respList"></datalist>
       </div>
     </div>
@@ -204,7 +207,7 @@ const SCOPE = "openid email https://www.googleapis.com/auth/spreadsheets";
 const TAB = "Registro";
 const AUTH_TAB = "Autorizados";
 const ALLOWED_DOMAIN = "tasky.cl";
-const HEADER = ["mes","fecha","nombre","tamano","totalTareas","noShows","pedido96","asig48","reemplazos","id","responsable"];
+const HEADER = ["mes","fecha","nombre","tamano","totalTareas","noShows","pedido96","asig48","reemplazos","id","responsable","incidencias"];
 const WEIGHTS = { m1:0.3, m2:0.4, m3:0.3 };
 const LS_ROWS = "tasky_cmp_rows";
 const LS_MONTHS = "tasky_cmp_months";
@@ -319,7 +322,7 @@ async function ensureSheet() {
   if (!titles.includes(TAB)) {
     await sheets("/"+sheetId+":batchUpdate", { method:"POST", body: JSON.stringify({ requests:[{ addSheet:{ properties:{ title:TAB } } }] }) });
   }
-  const h = await sheets("/"+sheetId+"/values/"+TAB+"!A1:K1");
+  const h = await sheets("/"+sheetId+"/values/"+TAB+"!A1:L1");
   if (!h.values || !h.values.length) {
     await sheets("/"+sheetId+"/values/"+TAB+"!A1?valueInputOption=RAW", { method:"PUT", body: JSON.stringify({ values:[HEADER] }) });
   }
@@ -327,12 +330,12 @@ async function ensureSheet() {
 function parseRemote(vals){
   return (vals||[]).slice(1).filter(x=>x&&x.length).map(x=>({
     mes:x[0]||"", fecha:x[1]||"", nombre:x[2]||"", tamano:Number(x[3])||0, totalTareas:Number(x[4])||0,
-    noShows:Number(x[5])||0, pedido96:x[6]||"Sí", asig48:x[7]||"Sí", reemplazos:Number(x[8])||0, id:x[9]||String(Math.random()), responsable:x[10]||"",
+    noShows:Number(x[5])||0, pedido96:x[6]||"Sí", asig48:x[7]||"Sí", reemplazos:Number(x[8])||0, id:x[9]||String(Math.random()), responsable:x[10]||"", incidencias:x[11]||"",
   }));
 }
 async function syncOnConnect() {
   await ensureSheet();
-  const r = await sheets("/"+sheetId+"/values/"+TAB+"!A1:K100000");
+  const r = await sheets("/"+sheetId+"/values/"+TAB+"!A1:L100000");
   const remote = parseRemote(r.values);
   if (remote.length) { rows = remote; saveLocal(); }        // Sheets manda si tiene datos
   else if (rows.length) { await pushToSheets(); }            // sembrar Sheets desde respaldo local
@@ -340,9 +343,9 @@ async function syncOnConnect() {
 async function pushToSheets() {
   if (!connected) return;
   await ensureSheet();
-  await sheets("/"+sheetId+"/values/"+TAB+"!A2:K100000:clear", { method:"POST", body:"{}" });
+  await sheets("/"+sheetId+"/values/"+TAB+"!A2:L100000:clear", { method:"POST", body:"{}" });
   if (rows.length) {
-    const values = rows.map(r=>[r.mes,r.fecha,r.nombre,r.tamano,r.totalTareas,r.noShows,r.pedido96,r.asig48,r.reemplazos,r.id,r.responsable||""]);
+    const values = rows.map(r=>[r.mes,r.fecha,r.nombre,r.tamano,r.totalTareas,r.noShows,r.pedido96,r.asig48,r.reemplazos,r.id,r.responsable||"",r.incidencias||""]);
     await sheets("/"+sheetId+"/values/"+TAB+"!A2?valueInputOption=RAW", { method:"PUT", body: JSON.stringify({ values }) });
   }
 }
@@ -428,12 +431,12 @@ function render() {
   }
 
   $("panelTitle").textContent="Activaciones de "+monthLabel(month)+(person!=="__all__"?" · "+person:"");
-  $("panelCount").textContent=c.n+(c.n===1?" activación":" activaciones");
+  $("panelCount").textContent=c.n+(c.n===1?" activación":" activaciones")+((()=>{const i=c.list.filter(r=>(r.incidencias||"").trim()).length;return i?" · "+i+" con incidencias":"";})());
   if(c.n===0){
     $("tableBox").innerHTML=`<div class="empty"><div class="big">Todavía no hay activaciones este mes</div><div>Cargá la primera abajo. Se guarda al instante (y en Sheets cuando hay conexión).</div></div>`;
   } else {
     $("tableBox").innerHTML=`<table><thead><tr>
-      <th>Fecha</th><th>Activación</th><th>Responsable</th><th>Tamaño</th><th>Tareas</th><th>No shows</th><th>≥96 hs</th><th>48 hs</th><th>Reempl.</th><th>Req.</th><th>Suf.</th><th></th>
+      <th>Fecha</th><th>Activación</th><th>Responsable</th><th>Tamaño</th><th>Tareas</th><th>No shows</th><th>≥96 hs</th><th>48 hs</th><th>Reempl.</th><th>Req.</th><th>Suf.</th><th>Incidencias</th><th></th>
       </tr></thead><tbody>${c.list.map(r=>`<tr>
       <td class="num" style="color:var(--muted)">${r.fecha||"—"}</td>
       <td style="font-weight:500">${escapeHtml(r.nombre)}</td>
@@ -445,6 +448,7 @@ function render() {
       <td class="num">${r.reemplazos}</td>
       <td class="num" style="color:var(--muted)">${r.req}</td>
       <td class="num"><span class="pill ${r.suf?"y":"n"}">${r.suf?"Sí":"No"}</span></td>
+      <td class="inccell" title="${escapeHtml(r.incidencias||"")}">${(r.incidencias||"").trim()?('<span class="incdot"></span>'+escapeHtml(r.incidencias)):'<span style="color:var(--hair)">—</span>'}</td>
       <td><button class="del" data-id="${r.id}">×</button></td></tr>`).join("")}</tbody></table>`;
     $("tableBox").querySelectorAll(".del").forEach(b=>b.onclick=()=>{ rows=rows.filter(r=>r.id!==b.dataset.id); save().then(render); });
   }
@@ -456,8 +460,8 @@ $("addBtn").onclick = () => {
   if(!nombre||!tamano||!tareas) return;
   rows.push({ mes:month, fecha:$("f_fecha").value, nombre, responsable:$("f_resp").value.trim(), tamano, totalTareas:tareas,
     noShows:Number($("f_noshows").value)||0, pedido96:$("f_p96").value, asig48:$("f_a48").value,
-    reemplazos:Number($("f_reempl").value)||0, id:String(Date.now()) });
-  ["f_nombre","f_fecha","f_resp","f_tamano","f_tareas"].forEach(i=>$(i).value="");
+    reemplazos:Number($("f_reempl").value)||0, incidencias:$("f_inc").value.trim(), id:String(Date.now()) });
+  ["f_nombre","f_fecha","f_resp","f_tamano","f_tareas","f_inc"].forEach(i=>$(i).value="");
   $("f_noshows").value="0"; $("f_reempl").value="0";
   save().then(render);
 };
